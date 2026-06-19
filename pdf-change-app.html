@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Canvas</title>
+    
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+    <style>
+        /* 연두색 메인 테마 적용 */
+        :root {
+            --primary-color: #7cb342; 
+            --primary-hover: #689f38;
+            --bg-color: #f1f8e9; 
+            --card-bg: #ffffff;
+            --accent-color: #dcedc8; 
+            --text-color: #333333;
+            --danger-color: #ff6b6b;
+        }
+
+        body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background-color: var(--bg-color); color: var(--text-color); }
+        
+        /* 전체 컨테이너 너비를 넓혀 페이지들이 더 크게 잘 보이도록 수정 */
+        .container { max-width: 1200px; margin: auto; background: var(--card-bg); padding: 30px; border-radius: 16px; box-shadow: 0 10px 30px rgba(124, 179, 66, 0.1); }
+        h1 { text-align: center; color: var(--primary-hover); margin-bottom: 25px; font-weight: 800; }
+        
+        /* 설명 부분 영역 축소 및 디자인 깔끔하게 정리 */
+        .upload-section { background: #f9fbf7; border: 2px dashed var(--accent-color); padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; text-align: center; transition: 0.3s; }
+        .upload-section:hover { border-color: var(--primary-color); }
+        
+        /* 명료해진 기능 설명 리스트 */
+        .instruction-list { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; margin-bottom: 12px; color: #555; }
+        .instruction-list span { background: white; padding: 6px 12px; border-radius: 8px; font-size: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e8f5e9; }
+        
+        input[type="file"] { margin-top: 5px; font-size: 15px; cursor: pointer; }
+        
+        #file-list-container { margin-top: 15px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+        .file-badge { 
+            display: inline-flex; align-items: center; gap: 8px; 
+            background-color: var(--accent-color); color: #33691e; 
+            padding: 8px 16px; border-radius: 30px; font-size: 13px; font-weight: bold; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: 0.2s;
+        }
+        .file-badge:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .badge-delete { cursor: pointer; color: #e53935; font-weight: 900; padding: 0 5px; border-radius: 50%; transition: 0.2s; }
+        .badge-delete:hover { background-color: #ffcdd2; transform: scale(1.15); }
+        
+        .action-section { text-align: center; margin: 30px 0 10px; }
+        button.download-btn { 
+            padding: 15px 35px; background-color: var(--primary-color); color: white; 
+            border: none; border-radius: 30px; font-size: 18px; font-weight: bold; 
+            cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(124, 179, 66, 0.4);
+        }
+        button.download-btn:hover { background-color: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(124, 179, 66, 0.6); }
+        
+        .status-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 10px; }
+        .page-counter { background-color: var(--primary-color); color: white; padding: 6px 15px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        
+        /* 썸네일 그리드 영역: 카드 크기 확대 적용 */
+        #page-container { 
+            display: flex; flex-wrap: wrap; gap: 20px; padding: 25px; 
+            background: #fafcf8; border: 1px solid #e0e0e0; border-radius: 12px; 
+            min-height: 300px; justify-content: center; align-items: flex-start; 
+        }
+        
+        /* 개별 페이지 카드 크기를 140px -> 180px로 키움 */
+        .page-card { 
+            position: relative; width: 180px; background: white; border-radius: 10px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08); cursor: grab; display: flex; 
+            flex-direction: column; align-items: center; padding-bottom: 12px; transition: transform 0.2s; 
+        }
+        .page-card:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.12); }
+        .page-card:active { cursor: grabbing; transform: scale(1.02); }
+        .page-card img { width: 100%; height: auto; border-top-left-radius: 10px; border-top-right-radius: 10px; border-bottom: 1px solid #f0f0f0; }
+        
+        .delete-btn { 
+            position: absolute; top: -10px; right: -10px; background: var(--danger-color); 
+            color: white; border: none; border-radius: 50%; width: 28px; height: 28px; 
+            font-weight: bold; cursor: pointer; display: flex; align-items: center; 
+            justify-content: center; box-shadow: 0 2px 5px rgba(255, 107, 107, 0.4); transition: 0.2s; 
+        }
+        .delete-btn:hover { background: #e84118; transform: scale(1.15); }
+        
+        .page-label { margin-top: 10px; font-size: 15px; color: var(--primary-hover); font-weight: 900; background: var(--accent-color); padding: 4px 14px; border-radius: 12px;}
+        #loading { display: none; color: var(--primary-hover); font-weight: bold; margin-top: 10px; font-size: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 PDF Canvas 🎨</h1>
+        
+        <div class="upload-section">
+            <div class="instruction-list">
+                <span>📂 <b>파일 추가</b>: 1개 혹은 여러 개의 PDF 파일 업로드</span>
+                <span>🖱️ <b>순서 변경</b>: 페이지를 드래그하여 이동</span>
+                <span>❌ <b>삭제</b>: 개별 페이지는 페이지 상단 <b>X</b>, 파일 전체는 파일명 옆 <b>X</b> 클릭</span>
+            </div>
+            
+            <input type="file" id="pdfInput" accept="application/pdf" multiple onchange="loadPDFs(event)">
+            <p id="loading">PDF를 화면에 불러오는 중입니다. 잠시만 기다려주세요... ⏳</p>
+            
+            <div id="file-list-container"></div>
+        </div>
+
+        <div class="status-bar">
+            <span class="page-counter" id="total-page-count">총 0 페이지</span>
+        </div>
+
+        <div id="page-container">
+            </div>
+
+        <div class="action-section">
+            <button class="download-btn" onclick="generateAndDownloadPDF()">이대로 새 PDF 다운로드 💾</button>
+        </div>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        let loadedPdfDocs = []; 
+        const container = document.getElementById('page-container');
+        const fileListContainer = document.getElementById('file-list-container');
+
+        new Sortable(container, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            onEnd: function() {
+                updatePageNumbers(); 
+            }
+        });
+
+        function updatePageNumbers() {
+            const cards = document.querySelectorAll('.page-card');
+            
+            document.getElementById('total-page-count').innerText = `총 ${cards.length} 페이지`;
+
+            cards.forEach((card, index) => {
+                const label = card.querySelector('.page-label');
+                if (label) {
+                    label.innerText = `P. ${index + 1}`;
+                }
+            });
+        }
+
+        async function loadPDFs(event) {
+            const files = event.target.files;
+            if (files.length === 0) return;
+
+            document.getElementById('loading').style.display = 'block';
+            const startIndex = loadedPdfDocs.length;
+
+            try {
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const arrayBuffer = await file.arrayBuffer();
+
+                    const pdfDocLib = await PDFLib.PDFDocument.load(arrayBuffer);
+                    loadedPdfDocs.push(pdfDocLib);
+                    const fileIndex = startIndex + i;
+
+                    const fileBadge = document.createElement('span');
+                    fileBadge.className = 'file-badge';
+                    fileBadge.innerHTML = `
+                        📄 ${file.name} 
+                        <span class="badge-delete" onclick="deleteEntireFile(${fileIndex}, this)" title="이 파일의 모든 페이지 삭제">✖</span>
+                    `;
+                    fileListContainer.appendChild(fileBadge);
+
+                    const typedarray = new Uint8Array(arrayBuffer);
+                    const pdfjsDoc = await pdfjsLib.getDocument(typedarray).promise;
+
+                    for (let pageNum = 1; pageNum <= pdfjsDoc.numPages; pageNum++) {
+                        const page = await pdfjsDoc.getPage(pageNum);
+                        const viewport = page.getViewport({ scale: 0.6 }); // 해상도 살짝 올림
+
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+
+                        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+                        createPageCard(canvas.toDataURL(), fileIndex, pageNum - 1, file.name);
+                    }
+                }
+            } catch (error) {
+                console.error("PDF 로드 중 오류:", error);
+                alert("PDF 파일을 읽는 중 오류가 발생했습니다.");
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                event.target.value = ''; 
+                updatePageNumbers(); 
+            }
+        }
+
+        function createPageCard(imgSrc, fileIndex, pageIndex, fileName) {
+            const card = document.createElement('div');
+            card.className = 'page-card';
+            card.dataset.fileIndex = fileIndex; 
+            card.dataset.pageIndex = pageIndex; 
+
+            const img = document.createElement('img');
+            img.src = imgSrc;
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.innerText = 'X';
+            deleteBtn.title = '이 페이지 삭제';
+            deleteBtn.onclick = function() {
+                card.remove(); 
+                updatePageNumbers(); 
+            };
+
+            const label = document.createElement('div');
+            label.className = 'page-label';
+            label.title = `원본: ${fileName} (P.${pageIndex + 1})`; 
+
+            card.appendChild(img);
+            card.appendChild(deleteBtn);
+            card.appendChild(label);
+
+            container.appendChild(card);
+        }
+
+        function deleteEntireFile(targetFileIndex, deleteBtnElement) {
+            if(!confirm("이 파일의 모든 페이지를 화면에서 삭제하시겠습니까?")) return;
+
+            const cards = document.querySelectorAll('.page-card');
+            cards.forEach(card => {
+                if (parseInt(card.dataset.fileIndex) === targetFileIndex) {
+                    card.remove();
+                }
+            });
+
+            deleteBtnElement.parentElement.remove();
+            updatePageNumbers(); 
+        }
+
+        async function generateAndDownloadPDF() {
+            const cards = document.querySelectorAll('.page-card');
+            
+            if (cards.length === 0) {
+                alert("출력할 페이지가 없습니다. PDF를 업로드해주세요.");
+                return;
+            }
+
+            document.getElementById('loading').innerText = "새로운 PDF를 생성 중입니다... ⏳";
+            document.getElementById('loading').style.display = 'block';
+
+            try {
+                const mergedPdf = await PDFLib.PDFDocument.create();
+
+                for (let card of cards) {
+                    const fIndex = parseInt(card.dataset.fileIndex);
+                    const pIndex = parseInt(card.dataset.pageIndex);
+
+                    const sourcePdf = loadedPdfDocs[fIndex];
+                    const [copiedPage] = await mergedPdf.copyPages(sourcePdf, [pIndex]);
+                    mergedPdf.addPage(copiedPage);
+                }
+
+                const pdfBytes = await mergedPdf.save();
+                const blob = new Blob([pdfBytes], { type: "application/pdf" });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = "Edited_Document.pdf";
+                link.click();
+
+            } catch (error) {
+                console.error("PDF 생성 오류:", error);
+                alert("PDF 생성 중 오류가 발생했습니다.");
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('loading').innerText = "PDF를 화면에 불러오는 중입니다. 잠시만 기다려주세요... ⏳";
+            }
+        }
+    </script>
+</body>
+</html>
